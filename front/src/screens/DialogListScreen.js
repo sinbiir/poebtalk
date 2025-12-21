@@ -1,4 +1,4 @@
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useState, useMemo } from 'react';
 import {
   View,
   Text,
@@ -14,6 +14,7 @@ import { useFocusEffect } from '@react-navigation/native';
 import DialogRow from '../components/DialogRow';
 import useChatStore from '../store/chatStore';
 import useAuthStore from '../store/authStore';
+import useGroupStore from '../store/groupStore';
 
 const DialogListScreen = ({ navigation }) => {
   const dialogs = useChatStore(state => state.dialogs);
@@ -26,6 +27,12 @@ const DialogListScreen = ({ navigation }) => {
   const createDialogByUsername = useChatStore(state => state.createDialogByUsername);
   const logout = useAuthStore(state => state.logout);
 
+  const groups = useGroupStore(state => state.groups);
+  const loadGroups = useGroupStore(state => state.loadGroups);
+  const groupsLoading = useGroupStore(state => state.groupsLoading);
+  const groupsRefreshing = useGroupStore(state => state.groupsRefreshing);
+  const groupsError = useGroupStore(state => state.groupsError);
+
   const [newPeer, setNewPeer] = useState('');
   const [creating, setCreating] = useState(false);
   const [createError, setCreateError] = useState(null);
@@ -33,12 +40,58 @@ const DialogListScreen = ({ navigation }) => {
   useFocusEffect(
     useCallback(() => {
       loadDialogs().catch(() => {});
-    }, [loadDialogs])
+      loadGroups().catch(() => {});
+    }, [loadDialogs, loadGroups])
   );
 
-  const renderItem = ({ item }) => (
-    <DialogRow dialog={item} onPress={() => navigation.navigate('Chat', { dialogId: item.id, peer: item.peer })} />
-  );
+  const combined = useMemo(() => {
+    const dialogItems = dialogs.map(d => ({ ...d, _type: 'dialog' }));
+    const groupItems = groups.map(g => ({
+      _type: 'group',
+      id: g.id,
+      peer: { username: g.name },
+      last_message: g.last_message,
+      last_message_at: g.last_message_at,
+      unread_count: 0,
+      members: g.members,
+      name: g.name,
+    }));
+    return [...dialogItems, ...groupItems].sort(
+      (a, b) => new Date(b.last_message_at || 0) - new Date(a.last_message_at || 0)
+    );
+  }, [dialogs, groups]);
+
+  const renderItem = ({ item }) => {
+    if (item._type === 'group') {
+      const preview =
+        item.last_message?.text ||
+        (item.last_message?.type === 'image'
+          ? '📷 Image'
+          : item.last_message?.type === 'file'
+            ? `📎 ${item.last_message?.file_name || 'File'}`
+            : 'No messages yet');
+      return (
+        <TouchableOpacity
+          style={styles.groupRow}
+          onPress={() => navigation.navigate('GroupChat', { groupId: item.id, group: item })}
+        >
+          <View style={styles.avatar}>
+            <Text style={styles.avatarText}>{item.name?.[0]?.toUpperCase() || 'G'}</Text>
+          </View>
+          <View style={styles.content}>
+            <View style={styles.row}>
+              <Text style={styles.name}>{item.name}</Text>
+              <Text style={styles.time}>{item.members?.length || 0} members</Text>
+            </View>
+            <Text style={styles.preview} numberOfLines={1}>
+              {preview}
+            </Text>
+          </View>
+        </TouchableOpacity>
+      );
+    }
+    return <DialogRow dialog={item} onPress={() => navigation.navigate('Chat', { dialogId: item.id, peer: item.peer })} />;
+  };
 
   const handleCreate = async () => {
     const value = newPeer.trim();
@@ -60,7 +113,7 @@ const DialogListScreen = ({ navigation }) => {
     <SafeAreaView style={styles.safe}>
       <View style={styles.header}>
         <View>
-          <Text style={styles.title}>Dialogs</Text>
+          <Text style={styles.title}>Dialogs & Groups</Text>
           <Text style={styles.sub}>WS: {wsStatus}</Text>
         </View>
         <TouchableOpacity style={styles.logoutBtn} onPress={logout}>
@@ -90,18 +143,27 @@ const DialogListScreen = ({ navigation }) => {
       </View>
 
       {dialogsError ? <Text style={styles.error}>{dialogsError}</Text> : null}
+      {groupsError ? <Text style={styles.error}>{groupsError}</Text> : null}
 
-      {dialogsLoading && !dialogs.length ? (
+      {(dialogsLoading || groupsLoading) && !combined.length ? (
         <View style={styles.loaderWrap}>
           <ActivityIndicator size="large" />
         </View>
       ) : (
         <FlatList
-          data={dialogs}
-          keyExtractor={item => item.id}
+          data={combined}
+          keyExtractor={item => `${item._type}-${item.id}`}
           renderItem={renderItem}
-          refreshControl={<RefreshControl refreshing={dialogsRefreshing} onRefresh={refreshDialogs} />}
-          ListEmptyComponent={<Text style={styles.empty}>No dialogs yet</Text>}
+          refreshControl={
+            <RefreshControl
+              refreshing={dialogsRefreshing || groupsRefreshing}
+              onRefresh={() => {
+                refreshDialogs();
+                loadGroups().catch(() => {});
+              }}
+            />
+          }
+          ListEmptyComponent={<Text style={styles.empty}>No dialogs or groups yet</Text>}
         />
       )}
     </SafeAreaView>
@@ -159,6 +221,28 @@ const styles = StyleSheet.create({
   loaderWrap: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   empty: { textAlign: 'center', marginTop: 20, color: '#94a3b8' },
   error: { color: 'red', marginHorizontal: 16, marginTop: 8 },
+  groupRow: {
+    flexDirection: 'row',
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f1f1f1',
+    backgroundColor: '#fff',
+  },
+  avatar: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: '#dbeafe',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  avatarText: { color: '#1d4ed8', fontWeight: '700', fontSize: 18 },
+  content: { flex: 1, marginLeft: 12 },
+  row: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  name: { fontSize: 16, fontWeight: '700', color: '#0f172a' },
+  time: { fontSize: 12, color: '#94a3b8' },
+  preview: { flex: 1, fontSize: 14, color: '#475569', marginTop: 4 },
 });
 
 export default DialogListScreen;

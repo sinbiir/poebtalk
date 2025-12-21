@@ -74,7 +74,7 @@ class WSClient {
     const forward = event => payload => {
       this.emit(event, payload?.payload || payload?.message || payload);
     };
-    ['message:ack', 'message:new', 'message:status', 'error'].forEach(evt => {
+    ['message:ack', 'message:new', 'message:status', 'group:message:ack', 'group:message:new', 'error'].forEach(evt => {
       this.socket.on(evt, forward(evt));
     });
   }

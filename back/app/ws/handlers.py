@@ -4,7 +4,7 @@ from sqlalchemy.exc import IntegrityError
 from flask_socketio import disconnect, join_room
 
 from app.extensions import db, socketio
-from app.models import Dialog, Message
+from app.models import Dialog, Message, Group, GroupMember, GroupMessage
 from app.utils.time import isoformat, parse_iso8601, utcnow
 from app.utils.security import encrypt_text, decrypt_text
 
@@ -72,6 +72,8 @@ def handle_message(data):
         _handle_message_delivered(user_id, payload)
     elif event_type == "message:read":
         _handle_message_read(user_id, payload)
+    elif event_type == "group:message:send":
+        _handle_group_message_send(user_id, payload)
     else:
         _emit_error("Unknown event type")
 
@@ -235,3 +237,89 @@ def _handle_message_read(user_id: str, payload: dict):
         },
         room=f"user:{target_message.sender_id}",
     )
+
+
+def _serialize_group_message(message: GroupMessage):
+    return {
+        "id": message.id,
+        "group_id": message.group_id,
+        "client_msg_id": message.client_msg_id,
+        "sender_id": message.sender_id,
+        "type": message.type,
+        "text": decrypt_text(message.text),
+        "file_url": message.file_url,
+        "file_name": message.file_name,
+        "file_mime": message.file_mime,
+        "file_size": message.file_size,
+        "created_at": isoformat(message.created_at),
+        "delivered_at": isoformat(message.delivered_at),
+        "read_at": isoformat(message.read_at),
+    }
+
+
+def _handle_group_message_send(user_id: str, payload: dict):
+    group_id = payload.get("group_id")
+    client_msg_id = payload.get("client_msg_id")
+    msg_type = payload.get("msg_type") or payload.get("type") or "text"
+    text = payload.get("text")
+    file_url = payload.get("file_url")
+    file_name = payload.get("file_name")
+    file_mime = payload.get("file_mime")
+    file_size = payload.get("file_size")
+
+    if not group_id or not client_msg_id:
+        _emit_error("group_id and client_msg_id are required")
+        return
+    group = Group.query.get(group_id)
+    if not group:
+        _emit_error("Group not found")
+        return
+    member = GroupMember.query.filter_by(group_id=group_id, user_id=user_id).first()
+    if not member:
+        _emit_error("Not a member of group")
+        return
+    if msg_type == "text":
+        if text is None:
+            _emit_error("text is required for text messages")
+            return
+    elif msg_type in {"file", "image"}:
+        if not file_url or not file_name:
+            _emit_error("file_url and file_name are required for attachments")
+            return
+    else:
+        _emit_error("Unsupported message type")
+        return
+
+    message = GroupMessage(
+        group_id=group_id,
+        sender_id=user_id,
+        client_msg_id=client_msg_id,
+        type=msg_type,
+        text=encrypt_text(text) if text else None,
+        file_url=file_url,
+        file_name=file_name,
+        file_mime=file_mime,
+        file_size=file_size,
+        created_at=utcnow(),
+    )
+    db.session.add(message)
+    try:
+        db.session.commit()
+    except IntegrityError:
+        db.session.rollback()
+        message = (
+            GroupMessage.query.filter_by(sender_id=user_id, client_msg_id=client_msg_id, group_id=group_id).first()
+        )
+        if not message:
+            _emit_error("Message conflict")
+            return
+
+    msg_payload = _serialize_group_message(message)
+    socketio.emit(
+        "group:message:ack",
+        {"type": "group:message:ack", "payload": {"client_msg_id": client_msg_id, "message": msg_payload}},
+        room=f"user:{user_id}",
+    )
+    member_ids = [gm.user_id for gm in GroupMember.query.filter_by(group_id=group_id).all()]
+    for uid in member_ids:
+        socketio.emit("group:message:new", {"type": "group:message:new", "payload": {"message": msg_payload}}, room=f"user:{uid}")

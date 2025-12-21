@@ -8,8 +8,11 @@ import LoginScreen from './src/screens/LoginScreen';
 import RegisterScreen from './src/screens/RegisterScreen';
 import DialogListScreen from './src/screens/DialogListScreen';
 import ChatScreen from './src/screens/ChatScreen';
+import GroupListScreen from './src/screens/GroupListScreen';
+import GroupChatScreen from './src/screens/GroupChatScreen';
 import useAuthStore from './src/store/authStore';
 import useChatStore from './src/store/chatStore';
+import useGroupStore from './src/store/groupStore';
 import wsClient from './src/ws/wsClient';
 
 const Stack = createNativeStackNavigator();
@@ -47,12 +50,18 @@ export default function App() {
       }
     });
     const offStatusMsg = wsClient.on('message:status', payload => useChatStore.getState().applyStatus(payload));
+    const offGroupAck = wsClient.on('group:message:ack', payload => useGroupStore.getState().applyAck(payload));
+    const offGroupNew = wsClient.on('group:message:new', payload =>
+      useGroupStore.getState().applyIncomingMessage(payload?.message || payload)
+    );
 
     return () => {
       offStatus && offStatus();
       offAck && offAck();
       offNew && offNew();
       offStatusMsg && offStatusMsg();
+      offGroupAck && offGroupAck();
+      offGroupNew && offGroupNew();
     };
   }, []);
 
@@ -61,9 +70,12 @@ export default function App() {
       wsClient.connect(accessToken);
       useChatStore.getState().initFromCache();
       useChatStore.getState().loadDialogs().catch(() => {});
+      useGroupStore.getState().initFromCache();
+      useGroupStore.getState().loadGroups().catch(() => {});
     } else {
       wsClient.disconnect();
       useChatStore.getState().reset();
+      // no reset for groups yet
     }
   }, [accessToken, user]);
 
@@ -96,7 +108,9 @@ function MainStack() {
   return (
     <Stack.Navigator>
       <Stack.Screen name="Dialogs" component={DialogListScreen} options={{ title: 'Dialogs' }} />
+      <Stack.Screen name="Groups" component={GroupListScreen} options={{ title: 'Groups' }} />
       <Stack.Screen name="Chat" component={ChatScreen} options={({ route }) => ({ title: route.params?.peer?.username || 'Chat' })} />
+      <Stack.Screen name="GroupChat" component={GroupChatScreen} options={({ route }) => ({ title: route.params?.group?.name || 'Group' })} />
     </Stack.Navigator>
   );
 }

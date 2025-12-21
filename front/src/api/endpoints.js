@@ -45,3 +45,30 @@ export const uploadFile = async formData => {
   const { data } = await api.post('/uploads', formData);
   return data;
 };
+
+// Groups
+export const getGroups = async () => {
+  const { data } = await api.get('/groups');
+  return data;
+};
+
+export const createGroupApi = async ({ name, memberUsernames = [] }) => {
+  const { data } = await api.post('/groups', { name, member_usernames: memberUsernames });
+  return data;
+};
+
+export const addGroupMembersApi = async (groupId, memberUsernames = []) => {
+  const { data } = await api.post(`/groups/${groupId}/members`, { member_usernames: memberUsernames });
+  return data;
+};
+
+export const getGroupMessages = async (groupId, params = {}) => {
+  const query = { limit: PAGE_SIZE, ...params };
+  const { data } = await api.get(`/groups/${groupId}/messages`, { params: query });
+  return data;
+};
+
+export const postGroupMessage = async (groupId, body) => {
+  const { data } = await api.post(`/groups/${groupId}/messages`, body);
+  return data;
+};

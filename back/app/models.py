@@ -91,3 +91,51 @@ class Message(db.Model):
 
     dialog = db.relationship("Dialog", back_populates="messages", foreign_keys=[dialog_id])
     sender = db.relationship("User", back_populates="messages")
+
+
+class Group(db.Model):
+    __tablename__ = "groups"
+
+    id = db.Column(db.String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    name = db.Column(db.String(120), nullable=False)
+    owner_id = db.Column(db.String(36), db.ForeignKey("users.id"), nullable=False)
+    created_at = db.Column(db.DateTime(timezone=True), default=_utcnow, nullable=False)
+
+    owner = db.relationship("User")
+    members = db.relationship("GroupMember", back_populates="group", cascade="all, delete")
+    messages = db.relationship("GroupMessage", back_populates="group", cascade="all, delete")
+
+
+class GroupMember(db.Model):
+    __tablename__ = "group_members"
+    __table_args__ = (UniqueConstraint("group_id", "user_id", name="uq_group_member"),)
+
+    id = db.Column(db.String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    group_id = db.Column(db.String(36), db.ForeignKey("groups.id"), nullable=False)
+    user_id = db.Column(db.String(36), db.ForeignKey("users.id"), nullable=False)
+    added_at = db.Column(db.DateTime(timezone=True), default=_utcnow, nullable=False)
+
+    group = db.relationship("Group", back_populates="members")
+    user = db.relationship("User")
+
+
+class GroupMessage(db.Model):
+    __tablename__ = "group_messages"
+    __table_args__ = (UniqueConstraint("sender_id", "client_msg_id", name="uq_group_sender_client_msg"),)
+
+    id = db.Column(db.String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    group_id = db.Column(db.String(36), db.ForeignKey("groups.id"), nullable=False, index=True)
+    sender_id = db.Column(db.String(36), db.ForeignKey("users.id"), nullable=False, index=True)
+    client_msg_id = db.Column(db.String(64), nullable=False)
+    type = db.Column(db.String(20), nullable=False, default="text")
+    text = db.Column(db.Text, nullable=True)
+    file_url = db.Column(db.String(512), nullable=True)
+    file_name = db.Column(db.String(255), nullable=True)
+    file_mime = db.Column(db.String(128), nullable=True)
+    file_size = db.Column(db.Integer, nullable=True)
+    created_at = db.Column(db.DateTime(timezone=True), default=_utcnow, nullable=False, index=True)
+    delivered_at = db.Column(db.DateTime(timezone=True), nullable=True)
+    read_at = db.Column(db.DateTime(timezone=True), nullable=True)
+
+    group = db.relationship("Group", back_populates="messages")
+    sender = db.relationship("User")
