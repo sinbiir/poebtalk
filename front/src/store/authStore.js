@@ -1,6 +1,7 @@
 ﻿import create from 'zustand';
 import axios from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { Platform } from 'react-native';
 import * as SecureStore from 'expo-secure-store';
 import { API_BASE_URL } from '../config';
 import { login as apiLogin, register as apiRegister } from '../api/endpoints';
@@ -9,14 +10,24 @@ const ACCESS_KEY = 'access_token';
 const REFRESH_KEY = 'refresh_token';
 const USER_KEY = 'auth_user';
 
+// SecureStore isn't available on web; fall back to AsyncStorage there.
+const tokenStore = {
+  setItem: (key, value) =>
+    Platform.OS === 'web' ? AsyncStorage.setItem(key, value) : SecureStore.setItemAsync(key, value),
+  getItem: key =>
+    Platform.OS === 'web' ? AsyncStorage.getItem(key) : SecureStore.getItemAsync(key),
+  deleteItem: key =>
+    Platform.OS === 'web' ? AsyncStorage.removeItem(key) : SecureStore.deleteItemAsync(key),
+};
+
 const persistTokens = async (access, refresh) => {
-  await SecureStore.setItemAsync(ACCESS_KEY, access);
-  await SecureStore.setItemAsync(REFRESH_KEY, refresh);
+  await tokenStore.setItem(ACCESS_KEY, access);
+  await tokenStore.setItem(REFRESH_KEY, refresh);
 };
 
 const clearTokens = async () => {
-  await SecureStore.deleteItemAsync(ACCESS_KEY);
-  await SecureStore.deleteItemAsync(REFRESH_KEY);
+  await tokenStore.deleteItem(ACCESS_KEY);
+  await tokenStore.deleteItem(REFRESH_KEY);
 };
 
 const persistUser = async user => {
@@ -72,14 +83,14 @@ const useAuthStore = create((set, get) => ({
   },
 
   refreshAccessToken: async () => {
-    const refresh = get().refreshToken || (await SecureStore.getItemAsync(REFRESH_KEY));
+    const refresh = get().refreshToken || (await tokenStore.getItem(REFRESH_KEY));
     if (!refresh) {
       await get().logout();
       return null;
     }
     const { data } = await axios.post(`${API_BASE_URL}/auth/refresh`, { refresh_token: refresh });
     const { access_token } = data;
-    await SecureStore.setItemAsync(ACCESS_KEY, access_token);
+    await tokenStore.setItem(ACCESS_KEY, access_token);
     set({ accessToken: access_token });
     return access_token;
   },
@@ -87,8 +98,8 @@ const useAuthStore = create((set, get) => ({
   restoreSession: async () => {
     try {
       const [access, refresh, user] = await Promise.all([
-        SecureStore.getItemAsync(ACCESS_KEY),
-        SecureStore.getItemAsync(REFRESH_KEY),
+        tokenStore.getItem(ACCESS_KEY),
+        tokenStore.getItem(REFRESH_KEY),
         restoreUser(),
       ]);
       if (access && refresh && user) {

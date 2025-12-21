@@ -15,6 +15,7 @@ def create_app():
     db.init_app(app)
     migrate.init_app(app, db)
     cors.init_app(app, resources={r"/*": {"origins": app.config.get("CORS_ORIGINS", "*")}})
+    jwt.init_app(app)
     socketio.init_app(app, cors_allowed_origins=app.config.get("CORS_ORIGINS", "*"))
     _configure_jwt()
     from .ws import handlers  # noqa: F401 - register socket handlers

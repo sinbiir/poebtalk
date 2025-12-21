@@ -52,7 +52,12 @@ class Dialog(db.Model):
     user1 = db.relationship("User", foreign_keys=[user1_id], back_populates="dialogs_as_user1")
     user2 = db.relationship("User", foreign_keys=[user2_id], back_populates="dialogs_as_user2")
     last_message = db.relationship("Message", foreign_keys=[last_message_id], post_update=True)
-    messages = db.relationship("Message", back_populates="dialog", cascade="all, delete")
+    messages = db.relationship(
+        "Message",
+        back_populates="dialog",
+        cascade="all, delete",
+        foreign_keys="Message.dialog_id",
+    )
 
     @staticmethod
     def get_between_users(user_a_id: str, user_b_id: str):
@@ -80,5 +85,5 @@ class Message(db.Model):
     delivered_at = db.Column(db.DateTime(timezone=True), nullable=True)
     read_at = db.Column(db.DateTime(timezone=True), nullable=True)
 
-    dialog = db.relationship("Dialog", back_populates="messages")
+    dialog = db.relationship("Dialog", back_populates="messages", foreign_keys=[dialog_id])
     sender = db.relationship("User", back_populates="messages")

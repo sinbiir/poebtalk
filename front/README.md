@@ -12,8 +12,8 @@ Simple Expo (React Native) frontend for private 1:1 chat with REST + WebSocket.
    npm install
    ```
 2. Configure environment (Expo uses `EXPO_PUBLIC_` vars):
-   - `EXPO_PUBLIC_API_BASE_URL` (e.g. `http://localhost:3000`)
-   - `EXPO_PUBLIC_WS_URL` (e.g. `ws://localhost:3000/ws`)
+   - `EXPO_PUBLIC_API_BASE_URL` (default `http://localhost:5000`)
+   - `EXPO_PUBLIC_WS_URL` (default `http://localhost:5000` — Socket.IO base URL, transport forced to websocket)
    You can set them inline when starting Expo: `EXPO_PUBLIC_API_BASE_URL=... EXPO_PUBLIC_WS_URL=... npx expo start`.
 
 ## Run

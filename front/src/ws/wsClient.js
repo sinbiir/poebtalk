@@ -1,8 +1,9 @@
-﻿import { WS_URL } from '../config';
+import { io } from 'socket.io-client';
+import { WS_URL } from '../config';
 
 class WSClient {
   constructor() {
-    this.ws = null;
+    this.socket = null;
     this.token = null;
     this.status = 'disconnected';
     this.shouldReconnect = false;
@@ -13,7 +14,7 @@ class WSClient {
 
   setAuthToken(token) {
     this.token = token;
-    if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+    if (this.socket?.connected) {
       this.sendRaw({ type: 'auth', access_token: token });
     }
   }
@@ -21,55 +22,61 @@ class WSClient {
   connect(token) {
     if (token) this.token = token;
     if (!this.token) return;
+
     this.shouldReconnect = true;
-    if (this.ws && (this.ws.readyState === WebSocket.OPEN || this.ws.readyState === WebSocket.CONNECTING)) {
+    if (this.socket?.connected) {
       return;
+    }
+    if (this.socket) {
+      this.socket.removeAllListeners();
+      this.socket.disconnect();
     }
     this.openSocket();
   }
 
   disconnect() {
     this.shouldReconnect = false;
-    if (this.ws) {
-      this.ws.close();
+    if (this.socket) {
+      this.socket.removeAllListeners();
+      this.socket.disconnect();
     }
-    this.ws = null;
+    this.socket = null;
     this.updateStatus('disconnected');
   }
 
   openSocket() {
     this.updateStatus('connecting');
-    this.ws = new WebSocket(WS_URL);
+    this.socket = io(WS_URL, {
+      transports: ['websocket'],
+      autoConnect: true,
+      reconnection: false, // we handle reconnection ourselves to keep state consistent
+    });
 
-    this.ws.onopen = () => {
+    this.socket.on('connect', () => {
       this.updateStatus('connected');
       if (this.token) {
         this.sendRaw({ type: 'auth', access_token: this.token });
       }
       this.flushQueue();
-    };
+    });
 
-    this.ws.onmessage = event => {
-      try {
-        const data = JSON.parse(event.data);
-        if (data?.type) {
-          this.emit(data.type, data.payload || data.message || data);
-        }
-      } catch (e) {
-        console.warn('WS message parse error', e);
-      }
-    };
-
-    this.ws.onerror = () => {
-      this.updateStatus('error');
-    };
-
-    this.ws.onclose = () => {
+    this.socket.on('disconnect', () => {
       this.updateStatus('disconnected');
       if (this.shouldReconnect) {
         this.scheduleReconnect();
       }
+    });
+
+    this.socket.on('connect_error', () => {
+      this.updateStatus('error');
+    });
+
+    const forward = event => payload => {
+      this.emit(event, payload?.payload || payload?.message || payload);
     };
+    ['message:ack', 'message:new', 'message:status', 'error'].forEach(evt => {
+      this.socket.on(evt, forward(evt));
+    });
   }
 
   scheduleReconnect() {
@@ -81,30 +88,31 @@ class WSClient {
   }
 
   flushQueue() {
-    if (!this.ws || this.ws.readyState !== WebSocket.OPEN) return;
+    if (!this.socket || !this.socket.connected) return;
     while (this.pendingMessages.length) {
-      this.ws.send(this.pendingMessages.shift());
+      const msg = this.pendingMessages.shift();
+      this.socket.emit('message', msg);
     }
   }
 
   send(type, payload) {
-    const message = JSON.stringify({ type, payload });
-    if (this.ws && this.ws.readyState === WebSocket.OPEN) {
-      this.ws.send(message);
+    const message = { type, payload };
+    if (this.socket?.connected) {
+      this.socket.emit('message', message);
     } else {
       this.pendingMessages.push(message);
-      if (!this.ws || this.ws.readyState === WebSocket.CLOSED) {
+      if (!this.socket || this.socket.disconnected) {
         this.scheduleReconnect();
       }
     }
   }
 
   sendRaw(obj) {
-    const msg = JSON.stringify(obj);
-    if (this.ws && this.ws.readyState === WebSocket.OPEN) {
-      this.ws.send(msg);
+    const message = { ...obj };
+    if (this.socket?.connected) {
+      this.socket.emit('message', message);
     } else {
-      this.pendingMessages.push(msg);
+      this.pendingMessages.push(message);
     }
   }
 
