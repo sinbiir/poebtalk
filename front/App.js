@@ -1,14 +1,15 @@
-﻿import "react-native-gesture-handler";
+import "react-native-gesture-handler";
 import React, { useEffect } from 'react';
 import { ActivityIndicator, View, AppState } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { StatusBar } from 'expo-status-bar';
+import * as Notifications from 'expo-notifications';
+import { Audio } from 'expo-av';
 import LoginScreen from './src/screens/LoginScreen';
 import RegisterScreen from './src/screens/RegisterScreen';
 import DialogListScreen from './src/screens/DialogListScreen';
 import ChatScreen from './src/screens/ChatScreen';
-import GroupListScreen from './src/screens/GroupListScreen';
 import GroupChatScreen from './src/screens/GroupChatScreen';
 import useAuthStore from './src/store/authStore';
 import useChatStore from './src/store/chatStore';
@@ -16,6 +17,40 @@ import useGroupStore from './src/store/groupStore';
 import wsClient from './src/ws/wsClient';
 
 const Stack = createNativeStackNavigator();
+
+Notifications.setNotificationHandler({
+  handleNotification: async () => ({
+    shouldShowAlert: true,
+    shouldPlaySound: true,
+    shouldSetBadge: false,
+  }),
+});
+
+async function registerNotifications() {
+  try {
+    const { status } = await Notifications.requestPermissionsAsync();
+    if (status !== 'granted') {
+      console.log('Notification permission not granted');
+    }
+  } catch (e) {
+    console.log('Notification permission error', e);
+  }
+}
+
+async function maybeNotify({ title, body }) {
+  try {
+    // play short sound
+    const sound = new Audio.Sound();
+    await sound.loadAsync({ uri: 'https://actions.google.com/sounds/v1/alarms/beep_short.ogg' });
+    await sound.playAsync();
+    await Notifications.scheduleNotificationAsync({
+      content: { title, body, sound: 'default' },
+      trigger: null,
+    });
+  } catch (e) {
+    console.log('notify error', e);
+  }
+}
 
 export default function App() {
   const { user, accessToken, initializing, restoreSession } = useAuthStore();
@@ -25,6 +60,7 @@ export default function App() {
   }, [restoreSession]);
 
   useEffect(() => {
+    registerNotifications();
     const unsubscribe = AppState.addEventListener('change', state => {
       useChatStore.getState().setAppState(state);
     });
@@ -47,13 +83,26 @@ export default function App() {
           read_at: now,
         });
         store.markRead(message.dialog_id, message.id, now);
+      } else {
+        maybeNotify({
+          title: message.sender_username || 'New message',
+          body: message.text || (message.type === 'image' ? 'Image' : 'Attachment'),
+        });
       }
     });
     const offStatusMsg = wsClient.on('message:status', payload => useChatStore.getState().applyStatus(payload));
     const offGroupAck = wsClient.on('group:message:ack', payload => useGroupStore.getState().applyAck(payload));
-    const offGroupNew = wsClient.on('group:message:new', payload =>
-      useGroupStore.getState().applyIncomingMessage(payload?.message || payload)
-    );
+    const offGroupNew = wsClient.on('group:message:new', payload => {
+      const msg = payload?.message || payload;
+      const store = useGroupStore.getState();
+      store.applyIncomingMessage(msg);
+      if (store.activeGroupId !== msg.group_id) {
+        maybeNotify({
+          title: msg.sender_username || 'Group message',
+          body: msg.text || (msg.type === 'image' ? 'Image' : 'Attachment'),
+        });
+      }
+    });
 
     return () => {
       offStatus && offStatus();
@@ -108,7 +157,6 @@ function MainStack() {
   return (
     <Stack.Navigator>
       <Stack.Screen name="Dialogs" component={DialogListScreen} options={{ title: 'Dialogs' }} />
-      <Stack.Screen name="Groups" component={GroupListScreen} options={{ title: 'Groups' }} />
       <Stack.Screen name="Chat" component={ChatScreen} options={({ route }) => ({ title: route.params?.peer?.username || 'Chat' })} />
       <Stack.Screen name="GroupChat" component={GroupChatScreen} options={({ route }) => ({ title: route.params?.group?.name || 'Group' })} />
     </Stack.Navigator>

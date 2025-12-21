@@ -30,8 +30,16 @@ const MessageBubble = ({ message, isOwn }) => {
   const isFile = message.type === 'file';
   const isImage = message.type === 'image';
   const isAttachment = isFile || isImage;
+  const senderName = message.sender_name || message.sender_username;
+  const avatar = message.sender_avatar_url ? withBase(message.sender_avatar_url) : null;
   return (
     <View style={[styles.container, isOwn ? styles.containerOwn : styles.containerPeer]}>
+      {senderName ? (
+        <View style={styles.senderRow}>
+          {avatar ? <Image source={{ uri: avatar }} style={styles.avatar} /> : <View style={styles.avatarFallback}><Text style={styles.avatarText}>{senderName[0]?.toUpperCase() || '?'}</Text></View>}
+          <Text style={styles.sender}>{senderName}</Text>
+        </View>
+      ) : null}
       <View style={[styles.bubble, isOwn ? styles.own : styles.peer]}>
         {isAttachment ? (
           <TouchableOpacity activeOpacity={0.8} onPress={() => openUrl(message.file_url)}>
@@ -65,6 +73,11 @@ const styles = StyleSheet.create({
   own: { backgroundColor: '#2563eb', borderBottomRightRadius: 4 },
   peer: { backgroundColor: '#e2e8f0', borderBottomLeftRadius: 4 },
   text: { color: '#0f172a' },
+  senderRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 4 },
+  sender: { marginLeft: 8, color: '#475569', fontWeight: '700' },
+  avatar: { width: 24, height: 24, borderRadius: 12, backgroundColor: '#cbd5e1' },
+  avatarFallback: { width: 24, height: 24, borderRadius: 12, backgroundColor: '#e2e8f0', alignItems: 'center', justifyContent: 'center' },
+  avatarText: { color: '#0f172a', fontWeight: '700' },
   fileName: { color: '#0f172a', fontWeight: '700', marginBottom: 4 },
   fileUrl: { color: '#1d4ed8', fontSize: 12 },
   download: { color: '#475569', fontSize: 12, marginTop: 4 },

@@ -23,11 +23,14 @@ def _require_auth():
 
 
 def _serialize_message(message: Message):
+    sender = message.sender
     return {
         "id": message.id,
         "dialog_id": message.dialog_id,
         "client_msg_id": message.client_msg_id,
         "sender_id": message.sender_id,
+        "sender_username": sender.username if sender else None,
+        "sender_avatar_url": sender.avatar_url if sender else None,
         "type": message.type,
         "text": decrypt_text(message.text),
         "file_url": message.file_url,
@@ -240,11 +243,14 @@ def _handle_message_read(user_id: str, payload: dict):
 
 
 def _serialize_group_message(message: GroupMessage):
+    sender = message.sender
     return {
         "id": message.id,
         "group_id": message.group_id,
         "client_msg_id": message.client_msg_id,
         "sender_id": message.sender_id,
+        "sender_username": sender.username if sender else None,
+        "sender_avatar_url": sender.avatar_url if sender else None,
         "type": message.type,
         "text": decrypt_text(message.text),
         "file_url": message.file_url,

@@ -15,11 +15,14 @@ def error_response(code: str, message: str, status: int):
 
 
 def serialize_message(message: Message):
+    sender = message.sender
     return {
         "id": message.id,
         "dialog_id": message.dialog_id,
         "client_msg_id": message.client_msg_id,
         "sender_id": message.sender_id,
+        "sender_username": sender.username if sender else None,
+        "sender_avatar_url": sender.avatar_url if sender else None,
         "type": message.type,
         "text": decrypt_text(message.text),
         "file_url": message.file_url,

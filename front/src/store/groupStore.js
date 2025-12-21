@@ -43,6 +43,7 @@ const useGroupStore = create((set, get) => ({
   groupsError: null,
   groupsRefreshing: false,
   messagesByGroupId: {},
+  activeGroupId: null,
 
   initFromCache: async () => {
     try {
@@ -72,7 +73,7 @@ const useGroupStore = create((set, get) => ({
     set({ groupsLoading: true, groupsError: null });
     try {
       const data = await getGroups();
-      const groups = data.items || [];
+      const groups = (data.items || []).map(g => ({ unread_count: g.unread_count || 0, ...g }));
       set({ groups, groupsLoading: false, groupsRefreshing: false });
       await AsyncStorage.setItem(GROUPS_KEY, JSON.stringify(groups));
     } catch (err) {
@@ -85,6 +86,8 @@ const useGroupStore = create((set, get) => ({
     set({ groupsRefreshing: true });
     await get().loadGroups();
   },
+
+  setActiveGroup: groupId => set({ activeGroupId: groupId }),
 
   createGroup: async ({ name, memberUsernames }) => {
     const { group } = await createGroupApi({ name, memberUsernames });
@@ -212,7 +215,17 @@ const useGroupStore = create((set, get) => ({
     set(state => {
       const current = state.messagesByGroupId[groupId] || initialMessagesState();
       const items = uniqueMerge(current.items, [message]);
-      return { messagesByGroupId: { ...state.messagesByGroupId, [groupId]: { ...current, items } } };
+      const groups = state.groups.map(g => {
+        if (g.id !== groupId) return g;
+        const shouldCountUnread =
+          state.activeGroupId !== groupId && message.sender_id !== useAuthStore.getState().user?.id;
+        const unread = shouldCountUnread ? (g.unread_count || 0) + 1 : g.unread_count || 0;
+        return { ...g, last_message: message, last_message_at: message.created_at, unread_count: unread };
+      });
+      return {
+        messagesByGroupId: { ...state.messagesByGroupId, [groupId]: { ...current, items } },
+        groups,
+      };
     });
     AsyncStorage.setItem(MSG_KEY(groupId), JSON.stringify(get().messagesByGroupId[groupId]?.items || []));
   },

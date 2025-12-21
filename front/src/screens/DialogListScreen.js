@@ -36,6 +36,11 @@ const DialogListScreen = ({ navigation }) => {
   const [newPeer, setNewPeer] = useState('');
   const [creating, setCreating] = useState(false);
   const [createError, setCreateError] = useState(null);
+  const [groupName, setGroupName] = useState('');
+  const [groupMembers, setGroupMembers] = useState('');
+  const [groupCreating, setGroupCreating] = useState(false);
+  const [groupError, setGroupError] = useState(null);
+  const createGroup = useGroupStore(state => state.createGroup);
 
   useFocusEffect(
     useCallback(() => {
@@ -52,7 +57,7 @@ const DialogListScreen = ({ navigation }) => {
       peer: { username: g.name },
       last_message: g.last_message,
       last_message_at: g.last_message_at,
-      unread_count: 0,
+      unread_count: g.unread_count || 0,
       members: g.members,
       name: g.name,
     }));
@@ -90,7 +95,11 @@ const DialogListScreen = ({ navigation }) => {
         </TouchableOpacity>
       );
     }
-    return <DialogRow dialog={item} onPress={() => navigation.navigate('Chat', { dialogId: item.id, peer: item.peer })} />;
+    return (
+      <View style={item.unread_count > 0 ? styles.unreadWrap : null}>
+        <DialogRow dialog={item} onPress={() => navigation.navigate('Chat', { dialogId: item.id, peer: item.peer })} />
+      </View>
+    );
   };
 
   const handleCreate = async () => {
@@ -106,6 +115,27 @@ const DialogListScreen = ({ navigation }) => {
       setCreateError(err?.response?.data?.error?.message || err?.message || 'Failed to create dialog');
     } finally {
       setCreating(false);
+    }
+  };
+
+  const handleCreateGroup = async () => {
+    const name = groupName.trim();
+    if (!name) return;
+    const memberUsernames = (groupMembers || '')
+      .split(',')
+      .map(s => s.trim())
+      .filter(Boolean);
+    setGroupCreating(true);
+    setGroupError(null);
+    try {
+      const group = await createGroup({ name, memberUsernames });
+      setGroupName('');
+      setGroupMembers('');
+      navigation.navigate('GroupChat', { groupId: group.id, group });
+    } catch (err) {
+      setGroupError(err?.response?.data?.error?.message || err?.message || 'Failed to create group');
+    } finally {
+      setGroupCreating(false);
     }
   };
 
@@ -140,6 +170,31 @@ const DialogListScreen = ({ navigation }) => {
           </TouchableOpacity>
         </View>
         {createError ? <Text style={styles.error}>{createError}</Text> : null}
+      </View>
+
+      <View style={styles.newBox}>
+        <Text style={styles.label}>Create group</Text>
+        <TextInput
+          style={styles.input}
+          placeholder="Group name"
+          value={groupName}
+          onChangeText={setGroupName}
+        />
+        <TextInput
+          style={styles.input}
+          placeholder="Usernames comma separated"
+          value={groupMembers}
+          onChangeText={setGroupMembers}
+          autoCapitalize="none"
+        />
+        <TouchableOpacity
+          style={[styles.createBtn, groupCreating && styles.btnDisabled]}
+          onPress={handleCreateGroup}
+          disabled={groupCreating}
+        >
+          <Text style={styles.createText}>{groupCreating ? '...' : 'Create group'}</Text>
+        </TouchableOpacity>
+        {groupError ? <Text style={styles.error}>{groupError}</Text> : null}
       </View>
 
       {dialogsError ? <Text style={styles.error}>{dialogsError}</Text> : null}
@@ -221,6 +276,7 @@ const styles = StyleSheet.create({
   loaderWrap: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   empty: { textAlign: 'center', marginTop: 20, color: '#94a3b8' },
   error: { color: 'red', marginHorizontal: 16, marginTop: 8 },
+  unreadWrap: { backgroundColor: '#eef2ff' },
   groupRow: {
     flexDirection: 'row',
     paddingVertical: 12,

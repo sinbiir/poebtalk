@@ -23,6 +23,7 @@ const GroupChatScreen = ({ route }) => {
     state => state.messagesByGroupId[groupId] || { items: [], loading: false, hasMore: false }
   );
   const groups = useGroupStore(state => state.groups);
+  const setActiveGroup = useGroupStore(state => state.setActiveGroup);
   const loadMessages = useGroupStore(state => state.loadMessages);
   const sendMessage = useGroupStore(state => state.sendMessage);
 
@@ -31,8 +32,10 @@ const GroupChatScreen = ({ route }) => {
   const [uploading, setUploading] = useState(false);
 
   useEffect(() => {
+    setActiveGroup(groupId);
     loadMessages(groupId);
-  }, [groupId, loadMessages]);
+    return () => setActiveGroup(null);
+  }, [groupId, loadMessages, setActiveGroup]);
 
   const handleSend = async () => {
     const value = text.trim();
