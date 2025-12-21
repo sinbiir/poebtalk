@@ -22,10 +22,10 @@ const GroupChatScreen = ({ route }) => {
   const groupState = useGroupStore(
     state => state.messagesByGroupId[groupId] || { items: [], loading: false, hasMore: false }
   );
-  const groups = useGroupStore(state => state.groups);
-  const setActiveGroup = useGroupStore(state => state.setActiveGroup);
   const loadMessages = useGroupStore(state => state.loadMessages);
   const sendMessage = useGroupStore(state => state.sendMessage);
+  const setActiveGroup = useGroupStore(state => state.setActiveGroup);
+  const groups = useGroupStore(state => state.groups);
 
   const [text, setText] = useState('');
   const [attachment, setAttachment] = useState(null);

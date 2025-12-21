@@ -1,6 +1,5 @@
-﻿import axios from 'axios';
+import axios from 'axios';
 import { API_BASE_URL } from '../config';
-import useAuthStore from '../store/authStore';
 
 const api = axios.create({
   baseURL: API_BASE_URL,
@@ -9,6 +8,16 @@ const api = axios.create({
 
 let isRefreshing = false;
 let failedQueue = [];
+let tokenGetter = () => null;
+let refreshTokenFn = null;
+
+export const setAuthTokenGetter = getter => {
+  tokenGetter = getter;
+};
+
+export const setRefreshTokenFn = fn => {
+  refreshTokenFn = fn;
+};
 
 const processQueue = (error, token = null) => {
   failedQueue.forEach(({ resolve, reject }) => {
@@ -23,7 +32,7 @@ const processQueue = (error, token = null) => {
 
 api.interceptors.request.use(
   async config => {
-    const token = useAuthStore.getState().accessToken;
+    const token = tokenGetter();
     if (token) {
       config.headers = config.headers || {};
       config.headers.Authorization = `Bearer ${token}`;
@@ -39,7 +48,7 @@ api.interceptors.response.use(
     const originalRequest = error.config;
     const status = error?.response?.status;
 
-    if (status === 401 && !originalRequest?._retry) {
+    if (status === 401 && !originalRequest?._retry && refreshTokenFn) {
       if (isRefreshing) {
         return new Promise((resolve, reject) => {
           failedQueue.push({ resolve, reject });
@@ -54,7 +63,7 @@ api.interceptors.response.use(
       originalRequest._retry = true;
       isRefreshing = true;
       try {
-        const newToken = await useAuthStore.getState().refreshAccessToken();
+        const newToken = await refreshTokenFn();
         if (!newToken) throw error;
         processQueue(null, newToken);
         originalRequest.headers.Authorization = `Bearer ${newToken}`;

@@ -1,11 +1,11 @@
-﻿import create from 'zustand';
+import { create } from 'zustand';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { getDialogs, getMessages, createDialog, uploadFile, postMessage } from '../api/endpoints';
 import { Platform } from 'react-native';
-import { API_BASE_URL } from '../config';
 import wsClient from '../ws/wsClient';
 import useAuthStore from './authStore';
 import { uuid } from '../utils/uuid';
+import { API_BASE_URL } from '../config';
 
 const DIALOGS_KEY = 'dialogs_cache';
 const MSG_KEY = dialogId => `messages_${dialogId}`;
@@ -23,6 +23,12 @@ const uniqueMerge = (existing = [], incoming = []) => {
 };
 
 const initialMessagesState = () => ({ items: [], loading: false, nextCursor: null, hasMore: true });
+
+const normalizeUrl = url => {
+  if (!url) return url;
+  if (url.startsWith('http')) return url;
+  return `${API_BASE_URL}${url}`;
+};
 
 const useChatStore = create((set, get) => ({
   dialogs: [],
@@ -331,14 +337,6 @@ const useChatStore = create((set, get) => ({
     });
     AsyncStorage.setItem(MSG_KEY(dialog_id), JSON.stringify(get().messagesByDialogId[dialog_id]?.items || []));
   },
-
-  normalizeUrl: url => normalizeUrl(url),
 }));
-
-const normalizeUrl = url => {
-  if (!url) return url;
-  if (url.startsWith('http')) return url;
-  return `${API_BASE_URL}${url}`;
-};
 
 export default useChatStore;

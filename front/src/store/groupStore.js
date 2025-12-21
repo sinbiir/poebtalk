@@ -1,4 +1,4 @@
-import create from 'zustand';
+import { create } from 'zustand';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
   getGroups,
@@ -222,10 +222,7 @@ const useGroupStore = create((set, get) => ({
         const unread = shouldCountUnread ? (g.unread_count || 0) + 1 : g.unread_count || 0;
         return { ...g, last_message: message, last_message_at: message.created_at, unread_count: unread };
       });
-      return {
-        messagesByGroupId: { ...state.messagesByGroupId, [groupId]: { ...current, items } },
-        groups,
-      };
+      return { messagesByGroupId: { ...state.messagesByGroupId, [groupId]: { ...current, items } }, groups };
     });
     AsyncStorage.setItem(MSG_KEY(groupId), JSON.stringify(get().messagesByGroupId[groupId]?.items || []));
   },
