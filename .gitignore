@@ -2,3 +2,4 @@
 /front/node_modules/.bin
 /back/.venv
 front/package-lock.json
+/back/instance/uploads

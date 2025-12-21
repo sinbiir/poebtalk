@@ -39,3 +39,9 @@ export const postReadUpTo = async (dialogId, body) => {
   const { data } = await api.post(`/dialogs/${dialogId}/read_up_to`, body);
   return data;
 };
+
+export const uploadFile = async formData => {
+  // Let axios set the multipart boundary automatically
+  const { data } = await api.post('/uploads', formData);
+  return data;
+};

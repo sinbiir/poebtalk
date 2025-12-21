@@ -3,7 +3,10 @@ import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { formatDialogTime } from '../utils/time';
 
 const DialogRow = ({ dialog, onPress }) => {
-  const lastText = dialog?.last_message?.text || 'No messages yet';
+  const lastMsg = dialog?.last_message;
+  const lastText =
+    lastMsg?.text ||
+    (lastMsg?.type === 'image' ? '📷 Image' : lastMsg?.type === 'file' ? `📎 ${lastMsg?.file_name || 'File'}` : 'No messages yet');
   const time = dialog?.last_message_at ? formatDialogTime(dialog.last_message_at) : '';
   const unread = dialog?.unread_count || 0;
   const avatarLetter = dialog?.peer?.username?.[0]?.toUpperCase() || '?';

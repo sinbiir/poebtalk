@@ -5,6 +5,7 @@ from sqlalchemy.exc import IntegrityError
 from app.extensions import db, socketio
 from app.models import Dialog, Message
 from app.utils.time import isoformat, parse_iso8601, utcnow
+from app.utils.security import encrypt_text, decrypt_text
 
 bp = Blueprint("messages", __name__)
 
@@ -20,7 +21,11 @@ def serialize_message(message: Message):
         "client_msg_id": message.client_msg_id,
         "sender_id": message.sender_id,
         "type": message.type,
-        "text": message.text,
+        "text": decrypt_text(message.text),
+        "file_url": message.file_url,
+        "file_name": message.file_name,
+        "file_mime": message.file_mime,
+        "file_size": message.file_size,
         "created_at": isoformat(message.created_at),
         "delivered_at": isoformat(message.delivered_at),
         "read_at": isoformat(message.read_at),
@@ -71,19 +76,33 @@ def send_message(dialog_id):
     client_msg_id = data.get("client_msg_id")
     msg_type = data.get("type")
     text = data.get("text")
+    file_url = data.get("file_url")
+    file_name = data.get("file_name")
+    file_mime = data.get("file_mime")
+    file_size = data.get("file_size")
+
     if not client_msg_id or not msg_type:
         return error_response("bad_request", "client_msg_id and type are required", 400)
-    if msg_type != "text":
-        return error_response("bad_request", "Only text messages are supported", 400)
-    if text is None:
-        return error_response("bad_request", "text is required for text messages", 400)
+
+    if msg_type == "text":
+        if text is None:
+            return error_response("bad_request", "text is required for text messages", 400)
+    elif msg_type in {"file", "image"}:
+        if not file_url or not file_name:
+            return error_response("bad_request", "file_url and file_name are required for attachments", 400)
+    else:
+        return error_response("bad_request", "Unsupported message type", 400)
 
     message = Message(
         dialog_id=dialog_id,
         sender_id=user_id,
         client_msg_id=client_msg_id,
         type=msg_type,
-        text=text,
+        text=encrypt_text(text) if text else None,
+        file_url=file_url,
+        file_name=file_name,
+        file_mime=file_mime,
+        file_size=file_size,
         created_at=utcnow(),
     )
     db.session.add(message)

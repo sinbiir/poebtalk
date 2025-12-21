@@ -80,7 +80,11 @@ class Message(db.Model):
     sender_id = db.Column(db.String(36), db.ForeignKey("users.id"), nullable=False, index=True)
     client_msg_id = db.Column(db.String(64), nullable=False)
     type = db.Column(db.String(20), nullable=False, default="text")
-    text = db.Column(db.Text, nullable=True)
+    text = db.Column(db.Text, nullable=True)  # stored encrypted if MESSAGE_ENC_KEY set
+    file_url = db.Column(db.String(512), nullable=True)
+    file_name = db.Column(db.String(255), nullable=True)
+    file_mime = db.Column(db.String(128), nullable=True)
+    file_size = db.Column(db.Integer, nullable=True)
     created_at = db.Column(db.DateTime(timezone=True), default=_utcnow, nullable=False, index=True)
     delivered_at = db.Column(db.DateTime(timezone=True), nullable=True)
     read_at = db.Column(db.DateTime(timezone=True), nullable=True)

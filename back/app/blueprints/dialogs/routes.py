@@ -6,6 +6,7 @@ from flask_jwt_extended import get_jwt_identity, jwt_required
 from app.extensions import db, socketio
 from app.models import Dialog, Message, User
 from app.utils.time import isoformat, utcnow
+from app.utils.security import decrypt_text
 
 bp = Blueprint("dialogs", __name__)
 
@@ -21,7 +22,11 @@ def serialize_message(message: Message):
         "client_msg_id": message.client_msg_id,
         "sender_id": message.sender_id,
         "type": message.type,
-        "text": message.text,
+        "text": decrypt_text(message.text),
+        "file_url": message.file_url,
+        "file_name": message.file_name,
+        "file_mime": message.file_mime,
+        "file_size": message.file_size,
         "created_at": isoformat(message.created_at),
         "delivered_at": isoformat(message.delivered_at),
         "read_at": isoformat(message.read_at),
@@ -43,7 +48,11 @@ def serialize_dialog(dialog: Dialog, current_user_id: str):
         last_message_data = {
             "id": last_msg.id,
             "type": last_msg.type,
-            "text": last_msg.text,
+            "text": decrypt_text(last_msg.text),
+            "file_url": last_msg.file_url,
+            "file_name": last_msg.file_name,
+            "file_mime": last_msg.file_mime,
+            "file_size": last_msg.file_size,
             "created_at": isoformat(last_msg.created_at),
             "sender_id": last_msg.sender_id,
         }

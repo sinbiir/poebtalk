@@ -23,10 +23,12 @@ def create_app():
     from .blueprints.auth.routes import bp as auth_bp
     from .blueprints.dialogs.routes import bp as dialogs_bp
     from .blueprints.messages.routes import bp as messages_bp
+    from .blueprints.uploads.routes import bp as uploads_bp
 
     app.register_blueprint(auth_bp, url_prefix="/auth")
     app.register_blueprint(dialogs_bp, url_prefix="/dialogs")
     app.register_blueprint(messages_bp, url_prefix="/dialogs")
+    app.register_blueprint(uploads_bp, url_prefix="/uploads")
 
     @app.errorhandler(HTTPException)
     def handle_http_exception(err):

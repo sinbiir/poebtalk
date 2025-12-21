@@ -1,6 +1,8 @@
 ﻿import create from 'zustand';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { getDialogs, getMessages, createDialog } from '../api/endpoints';
+import { getDialogs, getMessages, createDialog, uploadFile, postMessage } from '../api/endpoints';
+import { Platform } from 'react-native';
+import { API_BASE_URL } from '../config';
 import wsClient from '../ws/wsClient';
 import useAuthStore from './authStore';
 import { uuid } from '../utils/uuid';
@@ -155,17 +157,42 @@ const useChatStore = create((set, get) => ({
     }
   },
 
-  sendMessage: (dialogId, text) => {
+  sendMessage: async (dialogId, text, attachment) => {
     const userId = useAuthStore.getState().user?.id;
     const client_msg_id = uuid();
     const now = new Date().toISOString();
+    let uploaded = null;
+
+    if (attachment) {
+      const formData = new FormData();
+      if (Platform.OS === 'web') {
+        const res = await fetch(attachment.uri);
+        const blob = await res.blob();
+        formData.append('file', blob, attachment.name);
+      } else {
+        formData.append('file', {
+          uri: attachment.uri,
+          name: attachment.name,
+          type: attachment.type || 'application/octet-stream',
+        });
+      }
+      uploaded = await uploadFile(formData);
+      if (!uploaded?.url && !uploaded?.absolute_url) {
+        throw new Error('Upload failed');
+      }
+    }
+
     const localMsg = {
       id: client_msg_id,
       client_msg_id,
       dialog_id: dialogId,
       sender_id: userId,
-      type: 'text',
-      text,
+      type: attachment ? attachment.kind : 'text',
+      text: attachment ? null : text,
+      file_url: normalizeUrl(uploaded?.absolute_url || uploaded?.url),
+      file_name: uploaded?.file_name,
+      file_mime: uploaded?.file_mime,
+      file_size: uploaded?.file_size,
       created_at: now,
       delivered_at: null,
       read_at: null,
@@ -191,12 +218,21 @@ const useChatStore = create((set, get) => ({
       ),
     }));
     AsyncStorage.setItem(MSG_KEY(dialogId), JSON.stringify(get().messagesByDialogId[dialogId]?.items || []));
-    wsClient.send('message:send', {
+    const payload = {
       dialog_id: dialogId,
       client_msg_id,
-      msg_type: 'text',
-      text,
-    });
+      msg_type: attachment ? attachment.kind : 'text',
+      text: attachment ? null : text,
+      file_url: normalizeUrl(uploaded?.absolute_url || uploaded?.url),
+      file_name: uploaded?.file_name,
+      file_mime: uploaded?.file_mime,
+      file_size: uploaded?.file_size,
+    };
+    wsClient.send('message:send', payload);
+    // best-effort REST fallback when WS is disconnected
+    if (wsClient.status !== 'connected') {
+      postMessage(dialogId, payload).catch(() => {});
+    }
   },
 
   applyAck: ack => {
@@ -295,6 +331,14 @@ const useChatStore = create((set, get) => ({
     });
     AsyncStorage.setItem(MSG_KEY(dialog_id), JSON.stringify(get().messagesByDialogId[dialog_id]?.items || []));
   },
+
+  normalizeUrl: url => normalizeUrl(url),
 }));
+
+const normalizeUrl = url => {
+  if (!url) return url;
+  if (url.startsWith('http')) return url;
+  return `${API_BASE_URL}${url}`;
+};
 
 export default useChatStore;

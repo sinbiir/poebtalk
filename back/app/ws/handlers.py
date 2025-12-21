@@ -6,6 +6,7 @@ from flask_socketio import disconnect, join_room
 from app.extensions import db, socketio
 from app.models import Dialog, Message
 from app.utils.time import isoformat, parse_iso8601, utcnow
+from app.utils.security import encrypt_text, decrypt_text
 
 
 def _emit_error(message: str):
@@ -28,7 +29,11 @@ def _serialize_message(message: Message):
         "client_msg_id": message.client_msg_id,
         "sender_id": message.sender_id,
         "type": message.type,
-        "text": message.text,
+        "text": decrypt_text(message.text),
+        "file_url": message.file_url,
+        "file_name": message.file_name,
+        "file_mime": message.file_mime,
+        "file_size": message.file_size,
         "created_at": isoformat(message.created_at),
         "delivered_at": isoformat(message.delivered_at),
         "read_at": isoformat(message.read_at),
@@ -97,6 +102,10 @@ def _handle_message_send(user_id: str, payload: dict):
     client_msg_id = payload.get("client_msg_id")
     msg_type = payload.get("msg_type") or payload.get("type") or payload.get("message_type") or "text"
     text = payload.get("text")
+    file_url = payload.get("file_url")
+    file_name = payload.get("file_name")
+    file_mime = payload.get("file_mime")
+    file_size = payload.get("file_size")
     if not dialog_id or not client_msg_id:
         _emit_error("dialog_id and client_msg_id are required")
         return
@@ -104,11 +113,16 @@ def _handle_message_send(user_id: str, payload: dict):
     if not dialog or not dialog.includes_user(user_id):
         _emit_error("Dialog not found or access denied")
         return
-    if msg_type != "text":
-        _emit_error("Only text messages are supported")
-        return
-    if text is None:
-        _emit_error("text is required for text messages")
+    if msg_type == "text":
+        if text is None:
+            _emit_error("text is required for text messages")
+            return
+    elif msg_type in {"file", "image"}:
+        if not file_url or not file_name:
+            _emit_error("file_url and file_name are required for attachments")
+            return
+    else:
+        _emit_error("Unsupported message type")
         return
 
     message = Message(
@@ -116,7 +130,11 @@ def _handle_message_send(user_id: str, payload: dict):
         sender_id=user_id,
         client_msg_id=client_msg_id,
         type=msg_type,
-        text=text,
+        text=encrypt_text(text) if text else None,
+        file_url=file_url,
+        file_name=file_name,
+        file_mime=file_mime,
+        file_size=file_size,
         created_at=utcnow(),
     )
     db.session.add(message)
