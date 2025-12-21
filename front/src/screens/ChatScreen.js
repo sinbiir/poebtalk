@@ -35,18 +35,19 @@ const ChatScreen = ({ route }) => {
 
   useEffect(() => {
     if (!chatState.items?.length) return;
-    const lastFromPeer = [...chatState.items]
+    // Only act on unread messages from peer to avoid infinite update loops.
+    const lastUnreadFromPeer = [...chatState.items]
       .reverse()
-      .find(m => m.sender_id && m.sender_id !== user?.id);
-    if (lastFromPeer) {
-      const readAt = new Date().toISOString();
-      wsClient.send('message:read', {
-        dialog_id: dialogId,
-        last_read_message_id: lastFromPeer.id,
-        read_at: readAt,
-      });
-      markRead(dialogId, lastFromPeer.id, readAt);
-    }
+      .find(m => m.sender_id && m.sender_id !== user?.id && !m.read_at);
+    if (!lastUnreadFromPeer) return;
+
+    const readAt = new Date().toISOString();
+    wsClient.send('message:read', {
+      dialog_id: dialogId,
+      last_read_message_id: lastUnreadFromPeer.id,
+      read_at: readAt,
+    });
+    markRead(dialogId, lastUnreadFromPeer.id, readAt);
   }, [chatState.items, dialogId, markRead, user?.id]);
 
   const handleSend = () => {

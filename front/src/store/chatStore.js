@@ -1,6 +1,6 @@
 ﻿import create from 'zustand';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { getDialogs, getMessages } from '../api/endpoints';
+import { getDialogs, getMessages, createDialog } from '../api/endpoints';
 import wsClient from '../ws/wsClient';
 import useAuthStore from './authStore';
 import { uuid } from '../utils/uuid';
@@ -104,6 +104,20 @@ const useChatStore = create((set, get) => ({
   refreshDialogs: async () => {
     set({ dialogsRefreshing: true });
     await get().loadDialogs();
+  },
+
+  createDialogByUsername: async username => {
+    const clean = (username || '').trim();
+    if (!clean) throw new Error('Username is required');
+    const { dialog } = await createDialog({ peerUsername: clean });
+    set(state => {
+      const exists = state.dialogs.find(d => d.id === dialog.id);
+      const dialogs = exists
+        ? state.dialogs.map(d => (d.id === dialog.id ? { ...d, ...dialog } : d))
+        : [dialog, ...state.dialogs];
+      return { dialogs };
+    });
+    return dialog;
   },
 
   loadMessages: async dialogId => {

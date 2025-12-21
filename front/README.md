@@ -29,6 +29,7 @@ Use the QR code or run `npx expo start --android` / `--ios` / `--web`.
 - REST sync via Axios with refresh-token interceptor
 - WebSocket realtime with auto-reconnect and status banner
 - Local cache of dialogs/messages via AsyncStorage
+- Create a dialog by entering a peer's username (no need to know user_id)
 
 ## Project Structure
 - `App.js` — navigation and WS wiring

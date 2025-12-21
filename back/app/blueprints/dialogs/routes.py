@@ -73,15 +73,27 @@ def list_dialogs():
 def create_dialog():
     user_id = get_jwt_identity()
     data = request.get_json(force=True, silent=True) or {}
-    peer_user_id = data.get("peer_user_id")
-    if not peer_user_id:
-        return error_response("bad_request", "peer_user_id is required", 400)
-    if peer_user_id == user_id:
-        return error_response("bad_request", "Cannot create dialog with yourself", 400)
 
-    peer = User.query.get(peer_user_id)
-    if not peer:
-        return error_response("user_not_found", "Peer user not found", 404)
+    peer_user_id = data.get("peer_user_id")
+    peer_username = (data.get("peer_username") or "").strip() if data.get("peer_username") else None
+
+    if not peer_user_id and not peer_username:
+        return error_response("bad_request", "peer_user_id or peer_username is required", 400)
+    if peer_username and peer_user_id:
+        return error_response("bad_request", "Provide only one of peer_user_id or peer_username", 400)
+
+    peer = None
+    if peer_user_id:
+        if peer_user_id == user_id:
+            return error_response("bad_request", "Cannot create dialog with yourself", 400)
+        peer = User.query.get(peer_user_id)
+    else:
+        peer = User.query.filter_by(username=peer_username).first()
+        if not peer:
+            return error_response("user_not_found", "Peer user not found", 404)
+        if peer.id == user_id:
+            return error_response("bad_request", "Cannot create dialog with yourself", 400)
+        peer_user_id = peer.id
 
     existing = Dialog.get_between_users(user_id, peer_user_id)
     if existing:

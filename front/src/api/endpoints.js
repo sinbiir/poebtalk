@@ -16,8 +16,11 @@ export const getDialogs = async () => {
   return data;
 };
 
-export const createDialog = async peerUserId => {
-  const { data } = await api.post('/dialogs', { peer_user_id: peerUserId });
+export const createDialog = async ({ peerUserId, peerUsername }) => {
+  const body = {};
+  if (peerUserId) body.peer_user_id = peerUserId;
+  if (peerUsername) body.peer_username = peerUsername;
+  const { data } = await api.post('/dialogs', body);
   return data;
 };
 
