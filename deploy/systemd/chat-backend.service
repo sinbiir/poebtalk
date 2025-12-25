@@ -3,11 +3,15 @@ Description=Chat Backend
 After=network.target
 
 [Service]
-User=root
-WorkingDirectory=/root/chat/poebtalk/back
-Environment="FLASK_APP=run.py"
-EnvironmentFile=/root/chat/poebtalk/back/.env
-ExecStart=/root/chat/poebtalk/back/.venv/bin/gunicorn --worker-class eventlet -w 1 -b 0.0.0.0:5000 run:app
+# Непривилегированный запуск
+User=chatapp
+Group=chatapp
+# Корень проекта на сервере
+WorkingDirectory=/home/chatapp/chat/poebtalk/back
+# Файл переменных окружения приложения
+EnvironmentFile=/home/chatapp/chat/poebtalk/back/.env
+# Gunicorn из venv, 1 eventlet‑воркер, слушает 0.0.0.0:5000
+ExecStart=/home/chatapp/chat/poebtalk/back/.venv/bin/gunicorn --worker-class eventlet -w 1 -b 0.0.0.0:5000 run:app
 Restart=on-failure
 
 [Install]
