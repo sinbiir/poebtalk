@@ -45,6 +45,11 @@ def create_app():
         response = {"error": {"code": "internal_error", "message": "Internal server error"}}
         return jsonify(response), 500
 
+    @app.route("/", methods=["GET"])
+    @app.route("/health", methods=["GET"])
+    def health():
+        return jsonify({"status": "ok"}), 200
+
     return app
 
 
